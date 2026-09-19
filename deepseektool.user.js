@@ -150,9 +150,9 @@
         const NAV_ITEMS = [
             { key: 'fold', icon: 'code-tags', label: '代码块折叠' },
             { key: 'table', icon: 'table-large', label: '表格优化导出' },
-            { key: 'thinking', icon: 'brain', label: 'AI 思考预览' },
+            { key: 'thinking', icon: 'brain', label: 'AI 思考折叠' },
             { key: 'wide', icon: 'monitor', label: '宽屏模式' },
-            { key: 'chat', icon: 'send', label: '聊天增强' },
+            { key: 'chat', icon: 'send', label: '聊天发送' },
             { key: 'folder', icon: 'folder-outline', label: '对话文件夹' },
         ];
         const NAV_EXTRA = [
