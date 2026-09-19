@@ -715,7 +715,8 @@
             --dsl-fold-bg: var(--dsl-code-block-banner-background-color, var(--dsw-alias-markdown-code-block-banner, #1e1e2d));
         }
         /* ===== 思考区域「定高滚动预览窗口」：默认态（CSS 夹断），流式生成时自动生效。
-           分段结构下表头容器由 JS 整根移出滚动容器（见 splitThinkHeaderBand），越头几何上不可能。 */
+           分段结构下表头容器由 JS 整根移出滚动容器（见 splitThinkHeaderBand），越头几何上不可能。
+           窗口**不画边框、不加圆角** —— 夹断只靠高度差表达（少一圈视觉噪音，更贴近原生观感）。 */
         .ds-think-preview {
             display: block !important;       /* 避免内容盒为 display:contents/inline 而无盒子，导致 max-height/overflow 失效 */
             position: relative !important;   /* 保留定位参照：删掉会改锚点 */
@@ -723,14 +724,13 @@
             max-height: ${THINK_PREVIEW_MAX_H} !important;   /* 下限 80px / 上限 500px 由这个表达式兜住 */
             overflow-y: auto !important;
             overflow-x: hidden !important;
-            border-radius: 12px !important;  /* 边框改由包裹层画（见下），这里只保留圆角裁剪 */
             box-sizing: border-box;
         }
-        /* 预览窗口定位包裹层：滚动容器外包一层相对定位容器，**窗口边框**挂在这层（挂滚动容器上会随内容
-           一起滚走）。wrap 本身不参与布局，高度由内部滚动容器撑开。 */
+        /* 预览窗口定位包裹层：滚动容器外包一层相对定位容器（表头带会被搬进这一层，见 splitThinkHeaderBand）。
+           wrap 本身不参与布局，高度由内部滚动容器撑开；保留 position: relative —— 它同时是表头带的包含块，
+           去掉会改变表头带在「页面用绝对定位排它」时的参照。 */
         .ds-think-preview-wrap {
             position: relative;
-            border-radius: 12px;
         }
         /* wrap 插进「思考内容盒 → 正文」之间后，页面自己那条「上一个块 + 正文」的关系型间距规则
            （相邻兄弟 / :has() 之类）就不再匹配了：实测正文 margin-top 由 10px 变 0，预览态下这段间距
@@ -738,13 +738,6 @@
            正文还没生成时也照样生效（正文一出现就吃到这条），wrap 拆掉后本规则自然失效、不留残留。
            页面若改了间距，改这一个数即可。 */
         .ds-think-preview-wrap + .ds-assistant-message-main-content { margin-top: 10px !important; }
-        /* 窗口边框画在包裹层上（不是滚动容器）：不随内容滚动；--ds-frame-color 供轻量清理置为透明 */
-        .ds-think-preview-wrap::after {
-            content: ''; position: absolute; left: 0; right: 0; top: 0; bottom: 0;
-            border: 1px solid var(--ds-frame-color, rgba(128,128,128,0.28));
-            border-radius: 12px;
-            pointer-events: none; z-index: 1;   /* 不挡「展开」点击 */
-        }
         /* 防止内部 flex 子项（默认 min-height:auto）被内容撑破外层 max-height。
            **标题行必须排除**：页面给标题文字的自然值是 min-height:auto，一并压成 0 会让标题行在夹断态
            矮 6px（实测 行高 34 → 28、文字 min-height auto → 0px；展开后恢复原高 → 文字看起来"轻微下移"）。
@@ -2086,7 +2079,7 @@
         });
     }
 
-    // 在滚动容器外包一层相对定位层（窗口边框挂它上面，不随内容滚动）。幂等。
+    // 在滚动容器外包一层相对定位层（表头带会被搬进它里面，见 splitThinkHeaderBand）。幂等。
     // tc 已脱离文档时返回 null —— 否则 insertBefore 会抛 DOMException，调用方需据此放弃本轮。
     function ensureThinkPreviewWrap(tc) {
         let wrap = tc.parentElement;
@@ -2237,10 +2230,9 @@
         tc.style.setProperty('max-height', hide ? '0px' : THINK_PREVIEW_MAX_H, 'important');
         tc.style.setProperty('overflow-y', hide ? 'hidden' : 'auto', 'important');
         tc.style.setProperty('overflow-x', 'hidden', 'important');
+        // 包裹层必须已在（enableThinkPreview 先建后夹）：没有它说明这轮预览没建立起来 → 不标记表头。
         const wrap = tc.parentElement;
         if (!wrap || !wrap.classList || !wrap.classList.contains('ds-think-preview-wrap')) return;
-        if (hide) wrap.style.setProperty('--ds-frame-color', 'transparent');   // 0 高的窗口不画边框，否则留一条线
-        else wrap.style.removeProperty('--ds-frame-color');   // 其余情况恢复窗口边框（可能被上一次轻量清理置为透明）
         // 标记标题行与「纯表头容器」（splitThinkHeaderBand 的唯一判据）；每轮重做 —— 虚拟列表重建会丢 class。
         const head = findThinkHeadInside(tc);
         if (!head) return;
@@ -2254,14 +2246,14 @@
         }
     }
 
-    // 启用预览窗口：加夹断 class + 包一层定位层（边框与表头带挂在它上面）
+    // 启用预览窗口：加夹断 class + 包一层定位层（表头带会被搬进它里面，见 splitThinkHeaderBand）
     function enableThinkPreview(tc, state) {
         // 虚拟列表滚动重建时 class 可能被清掉而 state 仍在，此时必须允许重新启用
         if (state.enabled && tc.classList.contains('ds-think-preview')) return;
         state.enabled = true;
         state.following = true;
         tc.classList.add('ds-think-preview');
-        // 先建包裹层（边框、表头带都挂在它上面）；tc 已脱离文档时建不了 → 立即回退为「不处理」。
+        // 先建包裹层（表头带要搬进去）；tc 已脱离文档时建不了 → 立即回退为「不处理」。
         if (!ensureThinkPreviewWrap(tc)) {
             tc.classList.remove('ds-think-preview');
             state.enabled = false;
@@ -2292,8 +2284,8 @@
         tc.querySelectorAll('.ds-think-preview-headrow').forEach(unpin);
     }
 
-    // 释放预览：摘夹断、清内联与表头标记、边框隐形。**默认不搬 DOM**（不传 hard）—— 搬节点会打断页面
-    // 自身的收起/展开（点不动）；hard=true 才完整拆除（拆 wrap + 表头带归位）。
+    // 释放预览：摘夹断、清内联与表头标记。**默认不搬 DOM**（不传 hard）—— 搬节点会打断页面自身的
+    // 收起/展开（点不动），所以轻量清理只撤夹断（表头带留在包裹层里）；hard=true 才完整拆除（拆 wrap + 表头带归位）。
     function softenThinkPreview(tc, state, hard) {
         tc.classList.remove('ds-think-preview');
         tc.style.removeProperty('max-height');
@@ -2301,13 +2293,7 @@
         tc.style.removeProperty('overflow-x');
         clearThinkHeadMarks(tc);
         const wrap = tc.parentElement;
-        if (wrap && wrap.classList.contains('ds-think-preview-wrap')) {
-            if (hard) {
-                unwrapThinkPreviewWrap(tc);   // 边框是 wrap 的伪元素，随 wrap 一起消失
-            } else {
-                wrap.style.setProperty('--ds-frame-color', 'transparent');   // 边框隐形（不删节点）
-            }
-        }
+        if (hard && wrap && wrap.classList.contains('ds-think-preview-wrap')) unwrapThinkPreviewWrap(tc);
         if (state) state.enabled = false;
     }
 
@@ -2527,7 +2513,7 @@
                 const beforeTop = anchor.getBoundingClientRect().top;
                 try {
                     if (takeOver) {
-                        // 接管路径：原生 toggle 已被阻断 → 完整拆除（夹断/边框/包裹层/表头带归位一次到位）。
+                        // 接管路径：原生 toggle 已被阻断 → 完整拆除（夹断/包裹层/表头带归位一次到位）。
                         removeThinkPreview(unit, state);
                     } else {
                         // 放行路径：原生收起/展开照常执行，动画期间绝不能搬 DOM —— 只摘样式。
